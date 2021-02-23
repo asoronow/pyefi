@@ -1,2 +1,2 @@
 # pyefi
-A python command line program for EFI processing OME-TIFF files
+A python command line program for EFI focus stack (flattening) processing OME-TIFF files
