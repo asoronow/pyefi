@@ -15,4 +15,5 @@ class CommandLine():
 def main():
     '''The main cmd handler'''
     myTiff = TIFF("process/m107t.ome.tif")
-    print(myTiff.channels)
+    print(myTiff.channels[0])
+    print(myTiff.raw.shape)
