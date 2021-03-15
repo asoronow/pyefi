@@ -14,3 +14,8 @@ class CommandLine():
 
 def main():
     ''' Gets command line parameters executes program. '''
+    defaults = {
+        "lapKernel":13, 
+        "lapBlur":13
+        }
+    TIFF("m107.ome.tif", defaults).getFocused()
