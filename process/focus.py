@@ -15,17 +15,26 @@ class TIFF():
         ''' Store key parameters. Split the channels into their respectve zstacks. '''
         self.fname = fname
         self.outfile = fname.replace(params.input+"/", params.prefix) # Apply the prefix for output
-        self.raw = tf.imread(self.fname) # Raw tiff data
-        self.channels = [[] for i in range(self.raw.shape[1])] # list of channels
         self.params = params # Command line arguments
-        for c in range(0,self.raw.shape[1]): # Read channels into list
-            for zstack in self.raw[:,c,:,:]:
-                if zstack.dtype == 'uint16': # We can only handle 8-bit values with our detector
-                    self.channels[c].append((zstack/256).astype('uint8')) # Convert to 8-bit if necessary
-                elif zstack.dtype == 'uint8':
-                    self.channels[c].append(zstack)
+        with tf.TiffFile(self.fname) as tif:
+            axes = tif.series[0].axes
+            data = tif.asarray()
+            self.channels = [[] for c in range(0,data.shape[axes.find('C')])]
+            for c in range(0,data.shape[axes.find('C')]): # Read channels into list
+                if axes == 'CZYX':
+                    for zstack in data[c,:,:,:]:
+                        if zstack.dtype == 'uint16': # We can only handle 8-bit values with our detector
+                            self.channels[c].append((zstack/256).astype('uint8')) # Convert to 8-bit if necessary
+                        elif zstack.dtype == 'uint8':
+                            self.channels[c].append(zstack)
+                elif axes == 'ZCYX':
+                    for zstack in data[:,c,:,:]:
+                        if zstack.dtype == 'uint16': # We can only handle 8-bit values with our detector
+                            print
+                            self.channels[c].append((zstack/255).astype('uint8')) # Convert to 8-bit if necessary
+                        elif zstack.dtype == 'uint8':
+                            self.channels[c].append(zstack)
 
-        
     def __homography(self, zstackKeyPoints, motherKeyPoints, matched):
         ''' Finds homography between two images to warp images for alignment. '''
         # Empty arrays to fill in with matched points
@@ -43,30 +52,27 @@ class TIFF():
     def __align(self):
         ''' Aligns the images of each channel in the TIFF using ORB (Oriented FAST and Rotated BRIEF). '''
         # ORB is fast and works well for most images (also not patented)
-        detector = cv2.ORB_create(1500) # 1500 is the number of features to retain, higher accuracy
+        detector = cv2.ORB_create(1000) # 1000 is the number of features to retain, higher accuracy
 
         # Prepare the results list
         results = [[] for channel in self.channels]
         c = 0 # Channel counter
         for channel in self.channels:
-            mother = channel[0] # Take the top image as the mother iamge to align to
+            mother = channel[0] # Take the top image as the mother image to align to
             # Get the key points and descriptor using the detector
             motherKeyPoints, motherDesc = detector.detectAndCompute(mother, None)
             for zstack in range(1,len(channel)):
                 zstackKeyPoints, zstackDesc = detector.detectAndCompute(channel[zstack], None)
-
                 # If we are using ORB then we should just brute force it
                 # Hamming distance and crosscheck for feature matching
                 matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
                 raw = matcher.match(zstackDesc, motherDesc)
-                
                 sortedRaw = sorted(raw, key=lambda match: match.distance)
-                topMatches = sortedRaw[0:128] # Could bump this up, future parameter?
-
+                topMatches = sortedRaw[0:128]
                 # Find the homography of these two images
                 homography = self.__homography(zstackKeyPoints, motherKeyPoints, topMatches)
                 # Now actually do the alignment step
-                alignedImage = cv2.warpPerspective(channel[zstack], homography,  (channel[zstack].shape[1], channel[zstack].shape[0]), flags=cv2.INTER_LINEAR)
+                alignedImage = cv2.warpPerspective(channel[zstack], homography, (channel[zstack].shape[1], channel[zstack].shape[0]), flags=cv2.INTER_LINEAR)
                 results[c].append(alignedImage)
             c += 1 # increment channel count
 
@@ -127,7 +133,7 @@ class TIFF():
             
             absolute = np.absolute(np.asarray(processed)) # Get the absolute values of the mask
             boolMask = absolute == absolute.max(axis=0) # We only want the maxima, making it boolean to apply bitwise
-            mask = boolMask.astype(np.uint8) # convert here so we are sure of captability
+            mask = boolMask.astype(np.uint8) # convert here
 
             for zstack in range(0,len(channel)):
                 output = cv2.bitwise_not(channel[zstack], output, mask=mask[zstack]) # Apply our newly found mask
