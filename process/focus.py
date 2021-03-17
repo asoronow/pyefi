@@ -12,28 +12,10 @@ class TIFF():
     it makes for a cleaner workflow.
     '''
     def __init__(self, fname, params):
-        ''' Store key parameters. Split the channels into their respectve zstacks. '''
+        ''' Store key parameters. Prepare the output file name. '''
         self.fname = fname
         self.outfile = fname.replace(params.input+"/", params.prefix) # Apply the prefix for output
         self.params = params # Command line arguments
-        with tf.TiffFile(self.fname) as tif:
-            axes = tif.series[0].axes
-            data = tif.asarray()
-            self.channels = [[] for c in range(0,data.shape[axes.find('C')])]
-            for c in range(0,data.shape[axes.find('C')]): # Read channels into list
-                if axes == 'CZYX':
-                    for zstack in data[c,:,:,:]:
-                        if zstack.dtype == 'uint16': # We can only handle 8-bit values with our detector
-                            self.channels[c].append((zstack/256).astype('uint8')) # Convert to 8-bit if necessary
-                        elif zstack.dtype == 'uint8':
-                            self.channels[c].append(zstack)
-                elif axes == 'ZCYX':
-                    for zstack in data[:,c,:,:]:
-                        if zstack.dtype == 'uint16': # We can only handle 8-bit values with our detector
-                            print
-                            self.channels[c].append((zstack/255).astype('uint8')) # Convert to 8-bit if necessary
-                        elif zstack.dtype == 'uint8':
-                            self.channels[c].append(zstack)
 
     def __homography(self, zstackKeyPoints, motherKeyPoints, matched):
         ''' Finds homography between two images to warp images for alignment. '''
@@ -116,6 +98,27 @@ class TIFF():
 
     def getFocused(self):
         ''' Focus stacks each individual channel and then rebuilds TIFF for output. '''
+        
+        # Do this here so if we are doing a folder of TIFFs we don't overfill memory
+        with tf.TiffFile(self.fname) as tif:
+            axes = tif.series[0].axes
+            data = tif.asarray()
+            self.channels = [[] for c in range(0,data.shape[axes.find('C')])]
+            for c in range(0,data.shape[axes.find('C')]): # Read channels into list
+                if axes == 'CZYX':
+                    for zstack in data[c,:,:,:]:
+                        if zstack.dtype == 'uint16': # We can only handle 8-bit values with our detector
+                            self.channels[c].append((zstack/256).astype('uint8')) # Convert to 8-bit if necessary
+                        elif zstack.dtype == 'uint8':
+                            self.channels[c].append(zstack)
+                elif axes == 'ZCYX':
+                    for zstack in data[:,c,:,:]:
+                        if zstack.dtype == 'uint16': # We can only handle 8-bit values with our detector
+                            print
+                            self.channels[c].append((zstack/255).astype('uint8')) # Convert to 8-bit if necessary
+                        elif zstack.dtype == 'uint8':
+                            self.channels[c].append(zstack)
+
         aligned = self.__align() # The aligned channels
         # Helpful dictionary to select the algo
         algos = {'canny':self.__findCanny,'laplace':self.__findLoG,'sobel':self.__findSobel}
