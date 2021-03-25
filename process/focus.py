@@ -40,11 +40,11 @@ class TIFF():
         results = [[] for channel in self.channels]
         c = 0 # Channel counter
         for channel in self.channels:
-            mother = channel[0] # Take the top image as the mother image to align to
+            mother = channel[int(len(channel)/2)] # Take the top image as the mother image to align to
             # Get the key points and descriptor using the detector
             motherKeyPoints, motherDesc = detector.detectAndCompute(mother, None)
-            for zstack in range(1,len(channel)):
-                zstackKeyPoints, zstackDesc = detector.detectAndCompute(channel[zstack], None)
+            for zstack in [z for i,z in enumerate(channel) if i != int(len(channel)/2)]:
+                zstackKeyPoints, zstackDesc = detector.detectAndCompute(zstack, None)
                 # If we are using ORB then we should just brute force it
                 # Hamming distance and crosscheck for feature matching
                 matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
@@ -54,7 +54,7 @@ class TIFF():
                 # Find the homography of these two images
                 homography = self.__homography(zstackKeyPoints, motherKeyPoints, topMatches)
                 # Now actually do the alignment step
-                alignedImage = cv2.warpPerspective(channel[zstack], homography, (channel[zstack].shape[1], channel[zstack].shape[0]), flags=cv2.INTER_LINEAR)
+                alignedImage = cv2.warpPerspective(zstack, homography, (zstack.shape[1], zstack.shape[0]), flags=cv2.INTER_LINEAR)
                 results[c].append(alignedImage)
             c += 1 # increment channel count
 
