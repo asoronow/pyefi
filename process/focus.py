@@ -34,7 +34,7 @@ class TIFF():
     def __align(self):
         ''' Aligns the images of each channel in the TIFF using ORB (Oriented FAST and Rotated BRIEF). '''
         # ORB is fast and works well for most images (also not patented)
-        detector = cv2.ORB_create(1000) # 1000 is the number of features to retain, higher accuracy
+        detector = cv2.ORB_create(10000) # 10000 is the number of features to retain, higher accuracy
 
         # Prepare the results list
         results = [[] for channel in self.channels]
@@ -94,11 +94,11 @@ class TIFF():
             photometric='minisblack' # Tell the module these are grayscale, RGB gets funky
         )
 
-        print(f"Finished processing {self.fname}")
+        print(f"Finished processing, saved at {self.outfile}")
 
     def getFocused(self):
         ''' Focus stacks each individual channel and then rebuilds TIFF for output. '''
-        
+        print(f"Starting processing for {self.fname}")
         # Do this here so if we are doing a folder of TIFFs we don't overfill memory
         with tf.TiffFile(self.fname) as tif:
             axes = tif.series[0].axes
@@ -124,8 +124,6 @@ class TIFF():
         algos = {'canny':self.__findCanny,'laplace':self.__findLoG,'sobel':self.__findSobel}
         # List of the final focused channels
         focused = []
-
-        print(f"Starting processing for {self.fname}")
 
         for channel in aligned:
             processed = []
