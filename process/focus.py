@@ -1,6 +1,9 @@
 import cv2, os
 import tifffile as tf
 import numpy as np
+from skimage.filters import threshold_yen
+from skimage.exposure import rescale_intensity
+from skimage.io import imread, imsave
 
 class TIFF():
     '''
@@ -29,22 +32,28 @@ class TIFF():
         # Using RANSAC to approximate the locations of absolute homography between images
         homography, mask = cv2.findHomography(zstackPoints, motherPoints, cv2.RANSAC, ransacReprojThreshold=2.0)
 
-        return homography
-        
+        return homography   
+
     def __align(self):
         ''' Aligns the images of each channel in the TIFF using ORB (Oriented FAST and Rotated BRIEF). '''
         # ORB is fast and works well for most images (also not patented)
-        detector = cv2.ORB_create(10000) # 10000 is the number of features to retain, higher accuracy
+        detector = cv2.ORB_create(10000)
 
         # Prepare the results list
         results = [[] for channel in self.channels]
         c = 0 # Channel counter
         for channel in self.channels:
-            mother = channel[int(len(channel)/2)] # Take the top image as the mother image to align to
+            mother = channel[0] # Take the top image as the mother image to align to
             # Get the key points and descriptor using the detector
-            motherKeyPoints, motherDesc = detector.detectAndCompute(mother, None)
-            for zstack in [z for i,z in enumerate(channel) if i != int(len(channel)/2)]:
-                zstackKeyPoints, zstackDesc = detector.detectAndCompute(zstack, None)
+            #yen_threshold = threshold_yen(mother)
+            #bmother = rescale_intensity(mother, (0, yen_threshold), (0, 255))
+            bmother = cv2.convertScaleAbs(mother, 1.4, 15)
+            cv2.imwrite('mother.png', bmother)
+            motherKeyPoints, motherDesc = detector.detectAndCompute(bmother, None)
+            for zstack in range(1,len(channel)):
+                bstack = cv2.convertScaleAbs(channel[zstack], 1.4, 15)
+                cv2.imwrite('stack.png', bstack)
+                zstackKeyPoints, zstackDesc = detector.detectAndCompute(bstack, None)
                 # If we are using ORB then we should just brute force it
                 # Hamming distance and crosscheck for feature matching
                 matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
@@ -54,7 +63,8 @@ class TIFF():
                 # Find the homography of these two images
                 homography = self.__homography(zstackKeyPoints, motherKeyPoints, topMatches)
                 # Now actually do the alignment step
-                alignedImage = cv2.warpPerspective(zstack, homography, (zstack.shape[1], zstack.shape[0]), flags=cv2.INTER_LINEAR)
+                
+                alignedImage = cv2.warpPerspective(bstack, homography, (channel[zstack].shape[1], channel[zstack].shape[0]), flags=cv2.INTER_LINEAR)
                 results[c].append(alignedImage)
             c += 1 # increment channel count
 
