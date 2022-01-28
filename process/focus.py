@@ -1,9 +1,6 @@
 import cv2, os
 import tifffile as tf
 import numpy as np
-from skimage.filters import threshold_yen
-from skimage.exposure import rescale_intensity
-from skimage.io import imread, imsave
 
 class TIFF():
     '''
@@ -47,13 +44,9 @@ class TIFF():
             # Get the key points and descriptor using the detector
             #yen_threshold = threshold_yen(mother)
             #bmother = rescale_intensity(mother, (0, yen_threshold), (0, 255))
-            bmother = cv2.convertScaleAbs(mother, 1.4, 15)
-            cv2.imwrite('mother.png', bmother)
-            motherKeyPoints, motherDesc = detector.detectAndCompute(bmother, None)
+            motherKeyPoints, motherDesc = detector.detectAndCompute(mother, None)
             for zstack in range(1,len(channel)):
-                bstack = cv2.convertScaleAbs(channel[zstack], 1.4, 15)
-                cv2.imwrite('stack.png', bstack)
-                zstackKeyPoints, zstackDesc = detector.detectAndCompute(bstack, None)
+                zstackKeyPoints, zstackDesc = detector.detectAndCompute(channel[zstack], None)
                 # If we are using ORB then we should just brute force it
                 # Hamming distance and crosscheck for feature matching
                 matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
@@ -64,7 +57,7 @@ class TIFF():
                 homography = self.__homography(zstackKeyPoints, motherKeyPoints, topMatches)
                 # Now actually do the alignment step
                 
-                alignedImage = cv2.warpPerspective(bstack, homography, (channel[zstack].shape[1], channel[zstack].shape[0]), flags=cv2.INTER_LINEAR)
+                alignedImage = cv2.warpPerspective(channel[zstack], homography, (channel[zstack].shape[1], channel[zstack].shape[0]), flags=cv2.INTER_LINEAR)
                 results[c].append(alignedImage)
             c += 1 # increment channel count
 
@@ -112,8 +105,9 @@ class TIFF():
         # Do this here so if we are doing a folder of TIFFs we don't overfill memory
         with tf.TiffFile(self.fname) as tif:
             axes = tif.series[0].axes
+            print(axes)
             data = tif.asarray()
-            self.channels = [[] for c in range(0,data.shape[axes.find('C')])]
+            self.channels = [[] for c in range(0,data.shape[axes.find('T')])]
             for c in range(0,data.shape[axes.find('C')]): # Read channels into list
                 if axes == 'CZYX':
                     for zstack in data[c,:,:,:]:
